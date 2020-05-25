@@ -12,3 +12,13 @@ center, .center{
 smallcenter, .smallcenter {
   display: block;
   margin: 0 0 0 10%;}
+
+.footer {
+  position: bottom;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  background-color: grey;
+  color: white;
+  text-align: center;
+}
