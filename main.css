@@ -1,0 +1,14 @@
+#banner {
+  margin-top: 150px;
+}
+
+section.row {
+  margin-top: 50px;
+}
+center, .center{
+  display:block;
+  margin:auto;
+}
+smallcenter, .smallcenter {
+  display: block;
+  margin: 0 0 0 10%;}
