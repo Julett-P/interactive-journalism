@@ -1,0 +1,161 @@
+
+#In Python 
+
+import twint
+
+import os
+
+users = ["NicolasMaduro", “MPPSalud”]
+
+#I used the following loop to scrape tweets published by @NicolasMaduro and @MPPSalud over three ranges of time (one-week-period): from 06 March to 12 March, from 13 March to 19 March, and from 25 March to 31 March. An example of the code is provided below. This proceeding was repeated with both users with the other two date ranges. 
+
+for u in users:
+    c = twint.Config()
+    c.Username = u
+    c.Since = "2020-03-06"
+    c.Until = "2020-03-12"
+
+    # Line below is only used if we want images
+    # c.Media = "TRUE"
+    #csv_name = str(u)+".csv"
+    c.Store_csv = 'TRUE'
+    c.Output = str(u)+".csv"
+
+    twint.run.Search(c)
+
+#I stored all of the .csv files in a folder in my desktop and then imported them to R to perform the text analysis
+
+
+#In R
+
+#I created two separate scripts to analyse the tweets by username and I combined each dataset (from the three date ranges) according to the user. An example of the code applied to @NicolasMaduro tweets is provided below. The following steps were also applied to the Ministry of Health account.
+
+library(tidyverse)
+library(devtools)
+devtools::install_github('bbc/bbplot')
+
+if(!require(pacman))install.packages("pacman")
+
+pacman::p_load('dplyr', 'tidyr', 'gapminder',
+               'ggplot2',  'ggalt',
+               'forcats', 'R.utils', 'png',
+               'grid', 'ggpubr', 'scales',
+               'bbplot')
+
+
+Maduro_df <- rbind(NM1, NM2, NM3)
+
+Maduro_df <- Maduro_df %>%
+  select(date, username, tweet)
+
+#Then I created a new variable called “period” to link each week to a stage of the epidemic in Venezuela (Before the first Covid-19 case, After the first case, and after the first death). I classified each tweet according to the stage they were published.
+
+Maduro_df$date <- as.POSIXct(as.Date(Maduro_df$date))
+
+Maduro_df$period <- cut.POSIXt(
+  Maduro_df$date,
+  breaks = as.POSIXct(as.Date(c("2020-03-05", "2020-03-12", "2020-03-20", "2020-04-01"))),
+  labels = c("Before First Case", "After First Case", "After First Death"))
+
+#I later proceeded to create a new column called Tweet_Content, which labeled each tweet as Covid-related or Non-Covid-related. In order to this, I used the grepl function, which searches for matches of a string or string vector. The argument below says that any tweet mentioning any of these words (Covid, Coronavirus, pandemic, respiratory, breathing, masks, hands, virus, flu, quarantine, or cases) would be classified as “Covid-related” in the new column. 
+
+Maduro_df <- mutate(Maduro_df, Tweet_Content = ifelse(grepl("COVID|Coronavirus|coronavirus|pandemia|respiratorias|respiración|mascarillas|manos|Respiratoria|virus|gripe|cuarentena|casos", tweet),
+        "Covid-related", "Non-Covid-related"))
+
+#To get an overall picture, I proceeded to group tweets depending on their content and the stage they were published. 
+
+Maduro <- Maduro_df %>%
+  group_by(period, Tweet_Content) %>%
+  summarise(count = n())
+
+#I later used ggplot to visualise the summarised information and implemented bbplot to give the charts a neat and consistent aesthetic throughout the whole project. 
+
+NMaduro_plot <- ggplot(Maduro, aes(x = period, y = count, fill = Tweet_Content)) +
+        geom_col(position = "dodge") + scale_fill_manual(values = c("firebrick3", "darksalmon")) + bbc_style() +
+        labs(title = "Nicolas Maduro's tweets during March",
+             subtitle = "Proportion of coronavirus-related tweets",
+             x = "Username", y = "Times tweeted") +
+        geom_text(aes(label = count), vjust= 1.6, color= "black", size = 4)
+
+print(NMaduro_plot)
+
+#I later proceeded to animate the bar plots using the gganimate package and saved the animation as a GIF.
+
+library(gganimate)
+
+anim_Maduro <- NMaduro_plot + transition_states(
+                          period,
+                          transition_length = 2,
+                          state_length = 1
+                          ) +
+                          shadow_mark() +
+                          enter_grow() + 
+                          ease_aes('linear')
+
+
+Gif_Maduro <- animate(anim_Maduro, fps = 10, width = 750, height = 500)
+
+Gif_Maduro_final <- anim_save("Madurotweets.gif", Gif_Maduro)
+
+
+#Now we proceed to do the text analysis with the bag of words technique
+
+install.packages(“reshape2”)
+install.packages(“tm“)
+install.packages(“qdap”)
+
+library(reshape2)
+library(tm)
+library(qdap)
+
+#This code is from NicolasMaduro’s first week’s text analysis. The following code was reproduced with NicolasMaduro’s second and third-week publications and the Ministry of Health’s first and second week. The analysis couldn’t be applied to the Ministry’s third week period because Twitter suspended the user.  
+
+NM1_data <- NM1
+NM1_analysis <- NM1_data$tweet
+
+#On a different script, I created a corpus with the scraped tweets.
+
+Maduro1_source <- VectorSource(NM1_analysis)
+
+Maduro1_corpus <- VCorpus(Maduro1_source)
+
+#And then I proceeded to clean the corpus in order to have a uniformed text by removing punctuation, upper cases, numbers, and stopwords in Spanish.
+
+Maduro1_clean <- tm_map(Maduro1_corpus, content_transformer(removePunctuation))
+Maduro1_clean <- tm_map(Maduro1_clean, content_transformer(tolower))
+Maduro1_clean <- tm_map(Maduro1_clean, content_transformer(removeNumbers))
+Maduro1_clean <- tm_map(Maduro1_clean, removeWords, words = c(stopwords("spanish")))
+
+Maduro1_tdm <- TermDocumentMatrix(Maduro1_clean)
+
+Maduro1_matrix <- as.matrix(Maduro_1_tdm)
+
+dim(Maduro1_matrix)
+
+Maduro1tweets <- rowSums(Maduro1_matrix)
+
+head(Maduro1tweets)
+
+Maduro1_tweets <- sort(Maduro1tweets, decreasing = TRUE)
+
+#After creating a matrix, I performed a very simple barplot to get an overall sense of the most frequent words. I preferred using the aforementioned method rather than just running the freq_terms function from qdap because this way I could have more control over the cleaning process and, therefore, on the overall results.  
+
+barplot(Maduro1_tweets[1:10], col = "red", las = 2)
+
+#I later used the melt function from the reshape2 package to change the frequent terms data from a wide matrix to a vertical data frame that could be effectively visualised with ggplot. In this case I also used bbplot to maintain the same aesthetics. 
+
+Maduro1_plot <- melt(as.matrix(Maduro1_tdm))
+Maduro_1_plot <- Maduro1_plot[Maduro1_plot$Terms %in% findFreqTerms(Maduro1_tdm, lowfreq = 5), ]
+
+
+Maduro1_finalplot <- ggplot(Maduro_1_plot, aes(x = value, y = reorder(Terms, value))) + 
+        geom_col(fill = "firebrick") + bbc_style() + 
+        labs(title = "Anticipation stage",
+        subtitle = "Most frequent terms used before first confirmed case",
+        x = "Frequency", y = "Terms")
+
+finalise_plot(plot_name = Maduro1_finalplot, 
+              source = "Source: @NicolasMaduro | Data from 06 March to 12 March", 
+              save_filepath = "Madurotweets1.png", 
+              width_pixels = 750, height_pixels = 500
+
